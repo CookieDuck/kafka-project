@@ -1,0 +1,10 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        maven {
+            url 'https://artifactory.global.dish.com/artifactory/repo'
+        }
+    }
+}
+
+rootProject.name = 'kafka-project'
