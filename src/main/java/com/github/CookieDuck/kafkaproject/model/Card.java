@@ -7,9 +7,9 @@ import lombok.NoArgsConstructor;
 
 @Data
 @Builder
-@AllArgsConstructor
 @NoArgsConstructor(force = true)
-public class Message {
-    private final String id;
-    private final String content;
+@AllArgsConstructor
+public class Card {
+    private String value;
+    private String suit;
 }

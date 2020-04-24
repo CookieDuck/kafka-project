@@ -1,3 +1,16 @@
-producer:
-  serverList: localhost:9092, localhost:9093, localhost:9094
-  topic: test
+cards:
+  kafka:
+    serverList: localhost:9092, localhost:9093, localhost:9094
+  topics:
+    deck: deck
+    top: top
+    bottom: bottom
+    shuffled: shuffled
+    output: output
+  pollIntervalMs: 10000
+
+logging:
+  level:
+    root: INFO
+    org.apache.kafka.clients: OFF
+    com.github.CookieDuck: INFO
