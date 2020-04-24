@@ -30,3 +30,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### UI dependencies and output
+node_modules/
+src/main/resources/static/dist/

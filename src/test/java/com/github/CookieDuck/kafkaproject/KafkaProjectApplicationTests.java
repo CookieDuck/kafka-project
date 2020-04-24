@@ -1,13 +1,15 @@
 package com.github.CookieDuck.kafkaproject;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class KafkaProjectApplicationTests {
+public class KafkaProjectApplicationTests {
+	public KafkaProjectApplicationTests() {
+	}
 
 	@Test
-	void contextLoads() {
+	public void contextLoads() {
 	}
 
 }

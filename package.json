@@ -1,0 +1,20 @@
+{
+  "name": "kafka-project-ui",
+  "description": "Server-side rendering with real time updates from kafka messaging",
+  "dependencies": {
+    "a11y-react-emoji": "^1.1.2",
+    "react": "^16.13.1",
+    "react-dom": "^16.13.1",
+    "react-numeric-input": "^2.2.3",
+    "react-select": "^3.1.0",
+    "styled-components": "^5.1.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.9.0",
+    "@babel/preset-env": "^7.9.5",
+    "@babel/preset-react": "^7.9.4",
+    "babel-loader": "^8.1.0",
+    "webpack": "^4.43.0",
+    "webpack-cli": "^3.3.11"
+  }
+}
