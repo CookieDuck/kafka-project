@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 import org.springframework.util.StringUtils;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.Properties;
 
@@ -95,6 +96,11 @@ public class BeanFactory {
     @Bean
     public DeckRepo deckRepo() {
         return new InMemoryDeckRepo();
+    }
+
+    @Bean
+    public SseEmitter sseEmitter() {
+        return new SseEmitter(Long.MAX_VALUE);
     }
 
     @Bean

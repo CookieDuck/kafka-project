@@ -2,7 +2,10 @@ plugins {
 	id 'org.springframework.boot' version '2.1.2.RELEASE'
 	id 'io.spring.dependency-management' version '1.0.9.RELEASE'
 	id 'java'
+	id 'com.moowork.node' version '1.3.1'
 }
+
+apply plugin: 'com.moowork.node'
 
 group = 'com.github.CookieDuck'
 version = '0.0.1-SNAPSHOT'
@@ -33,6 +36,21 @@ dependencies {
 	testImplementation 'org.springframework.kafka:spring-kafka-test'
 }
 
-test {
-	useJUnitPlatform()
+node {
+	version = '11.10.1'
+	npmVersion = '5.6.0'
+	download = false // using locally installed version due to proxy issues
 }
+
+task buildReactApp(type: NodeTask, dependsOn: 'npmInstall') {
+	script = project.file('node_modules/.bin/webpack')
+	args = [
+		'--mode', 'development',
+		'--entry', './src/main/ui/App.jsx',
+		'-o', './src/main/resources/static/dist/react-app.js'
+	]
+}
+
+processResources.dependsOn 'buildReactApp'
+clean.delete << file('node_modules')
+clean.delete << file('src/main/resources/static/dist')
