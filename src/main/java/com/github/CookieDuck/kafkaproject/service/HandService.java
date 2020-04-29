@@ -56,6 +56,7 @@ public class HandService extends AbstractDeckEntityConsumer {
                     .build();
 
                 toRecord(producerTopic, portion).ifPresent(producer::send);
+                pause();
             }
             log.debug("{} finished sending its cards", super.getConsumerTopic());
         });
@@ -88,5 +89,21 @@ public class HandService extends AbstractDeckEntityConsumer {
         nCards = Math.min(nCards, cards.size());
 
         return cards.subList(0, nCards);
+    }
+
+    /**
+     * Sleep for 1 or 3 milliseconds.  This SHOULD add some more randomness and
+     * interweaving of cards from the top and bottom consumers producing to the
+     * shuffled topic.
+     */
+    private void pause() {
+        double diceRoll = Math.random();
+        int sleepMs = diceRoll < 0.5 ? 1 : 3;
+        try {
+            Thread.sleep(sleepMs);
+            log.debug("The hand riffling the {} packet slept for {} ms", getConsumerTopic(), sleepMs);
+        } catch (InterruptedException e) {
+            log.error("Thread Interrupted while sleeping", e);
+        }
     }
 }
