@@ -1,9 +1,14 @@
 package com.github.CookieDuck.kafkaproject.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.CookieDuck.kafkaproject.message.KafkaMessageSender;
+import com.github.CookieDuck.kafkaproject.message.MessageSender;
+import com.github.CookieDuck.kafkaproject.repo.DeckEntity;
 import com.github.CookieDuck.kafkaproject.repo.DeckRepo;
 import com.github.CookieDuck.kafkaproject.repo.InMemoryDeckRepo;
+import com.github.CookieDuck.kafkaproject.service.DeckService;
 import com.github.CookieDuck.kafkaproject.service.HandService;
+import com.github.CookieDuck.kafkaproject.service.ShuffleService;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -36,8 +41,118 @@ public class BeanFactory {
 
     @Bean
     KafkaProducer<String, String> producer() {
-        Properties properties = new Properties();
+        return new KafkaProducer<>(configureProducer());
+    }
 
+    /*
+     * Because KafkaConsumer is not thread safe, this bean needs to be
+     * declared with the scope prototype.  The application fails to load
+     * if multiple threads try to access the same consumer.
+     */
+    @Bean
+    @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+    KafkaConsumer<String, String> consumer() {
+        return new KafkaConsumer<>(configureConsumer());
+    }
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
+    }
+
+    @Bean
+    public DeckRepo deckRepo() {
+        return new InMemoryDeckRepo();
+    }
+
+    @Bean
+    public SseEmitter sseEmitter() {
+        return new SseEmitter(Long.MAX_VALUE);
+    }
+
+    @Bean
+    public DeckService deckService(
+        KafkaConsumer<String, String> consumer,
+        KafkaProducer<String, String> producer,
+        ObjectMapper objectMapper
+    ) {
+        String topTopic = config.getTopics().getTop();
+        KafkaMessageSender topSender = new KafkaMessageSender(producer, topTopic, objectMapper);
+        String bottomTopic = config.getTopics().getBottom();
+        KafkaMessageSender bottomSender = new KafkaMessageSender(producer, bottomTopic, objectMapper);
+
+        return new DeckService(
+            consumer,
+            topSender,
+            bottomSender,
+            config,
+            objectMapper
+        );
+    };
+
+    @Bean
+    public HandService top(
+        KafkaConsumer<String, String> consumer,
+        MessageSender<DeckEntity> shuffledSender,
+        ObjectMapper objectMapper
+    ) {
+        return new HandService(
+            consumer,
+            shuffledSender,
+            config,
+            objectMapper,
+            config.getTopics().getTop()
+        );
+    }
+
+    @Bean
+    public HandService bottom(
+        KafkaConsumer<String, String> consumer,
+        MessageSender<DeckEntity> shuffledSender,
+        ObjectMapper objectMapper
+    ) {
+        return new HandService(
+            consumer,
+            shuffledSender,
+            config,
+            objectMapper,
+            config.getTopics().getBottom()
+        );
+    }
+
+    @Bean
+    MessageSender<DeckEntity> shuffledMessageSender(
+        KafkaProducer<String, String> producer,
+        ObjectMapper objectMapper
+    ) {
+        String topic = config.getTopics().getShuffled();
+        return new KafkaMessageSender(producer, topic, objectMapper);
+    }
+
+    @Bean
+    ShuffleService shuffleService(
+        KafkaConsumer<String, String> consumer,
+        KafkaProducer<String, String> producer,
+        ObjectMapper objectMapper,
+        DeckRepo deckRepo
+    ) {
+        String deckTopic = config.getTopics().getDeck();
+        MessageSender<DeckEntity> deckSender = new KafkaMessageSender(producer, deckTopic, objectMapper);
+        String outputTopic = config.getTopics().getOutput();
+        MessageSender<DeckEntity> outputSender = new KafkaMessageSender(producer, outputTopic, objectMapper);
+
+        return new ShuffleService(
+            consumer,
+            deckSender,
+            outputSender,
+            config,
+            objectMapper,
+            deckRepo
+        );
+    }
+
+    private Properties configureProducer() {
+        Properties properties = new Properties();
         properties.put(
             ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
             getServerList()
@@ -50,20 +165,11 @@ public class BeanFactory {
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
             SERIALIZER_NAME
         );
-
-        return new KafkaProducer<>(properties);
+        return properties;
     }
 
-    /*
-     * Because KafkaConsumer is not thread safe, this bean needs to be
-     * declared with the scope prototype.  The application fails to load
-     * if multiple threads try to access the same consumer.
-     */
-    @Bean
-    @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
-    KafkaConsumer<String, String> consumer() {
+    private Properties configureConsumer() {
         Properties properties = new Properties();
-
         properties.put(
             ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
             getServerList()
@@ -84,53 +190,7 @@ public class BeanFactory {
             ConsumerConfig.GROUP_ID_CONFIG,
             GROUP_ID
         );
-
-        return new KafkaConsumer<>(properties);
-    }
-
-    @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper();
-    }
-
-    @Bean
-    public DeckRepo deckRepo() {
-        return new InMemoryDeckRepo();
-    }
-
-    @Bean
-    public SseEmitter sseEmitter() {
-        return new SseEmitter(Long.MAX_VALUE);
-    }
-
-    @Bean
-    public HandService top(
-        KafkaConsumer<String, String> consumer,
-        KafkaProducer<String, String> producer,
-        ObjectMapper objectMapper
-    ) {
-        return new HandService(
-            consumer,
-            producer,
-            config,
-            objectMapper,
-            config.getTopics().getTop()
-        );
-    }
-
-    @Bean
-    public HandService bottom(
-        KafkaConsumer<String, String> consumer,
-        KafkaProducer<String, String> producer,
-        ObjectMapper objectMapper
-    ) {
-        return new HandService(
-            consumer,
-            producer,
-            config,
-            objectMapper,
-            config.getTopics().getBottom()
-        );
+        return properties;
     }
 
     private String getServerList() {

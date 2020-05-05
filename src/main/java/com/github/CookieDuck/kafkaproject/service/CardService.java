@@ -37,23 +37,30 @@ public class CardService {
     }
 
     public void shuffle(ShuffleRequest request) {
-        Optional<DeckEntity> maybeDeck = persistRequest(request);
+        Optional<DeckEntity> maybeDeck = processRequest(request);
         maybeDeck.ifPresent(this::sendDeckMessage);
     }
 
-    private Optional<DeckEntity> persistRequest(ShuffleRequest request) {
-        log.info("Received request {}", request);
-        DeckEntity deck;
+    private Optional<DeckEntity> processRequest(ShuffleRequest request) {
+        log.debug("Received request {}", request);
+        Optional<DeckEntity> maybeDeck = persistDeck(request);
+        maybeDeck.ifPresent((deck) -> persistShufflesRemaining(deck, request));
+        return maybeDeck;
+    }
+
+    private Optional<DeckEntity> persistDeck(ShuffleRequest request) {
         try {
-            deck = deckRepo.save(fromRequest(request));
+            return Optional.of(deckRepo.save(fromRequest(request)));
         } catch (DuplicateKeyException dae) {
             log.warn("Already processing a request for this deck; ignoring");
             return Optional.empty();
         }
+    }
+
+    private void persistShufflesRemaining(DeckEntity deck, ShuffleRequest request) {
         int id = deck.getId();
         log.info("Deck id from request: {}", id);
         deckRepo.updateShufflesRemaining(id, request.getTimes());
-        return Optional.of(deck);
     }
 
     private void sendDeckMessage(DeckEntity deck) {

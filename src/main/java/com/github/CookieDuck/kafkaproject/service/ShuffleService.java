@@ -2,6 +2,9 @@ package com.github.CookieDuck.kafkaproject.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.CookieDuck.kafkaproject.config.KafkaConfiguration;
+import com.github.CookieDuck.kafkaproject.message.KafkaMessageSender;
+import com.github.CookieDuck.kafkaproject.message.MessageBuilder;
+import com.github.CookieDuck.kafkaproject.message.MessageSender;
 import com.github.CookieDuck.kafkaproject.model.Card;
 import com.github.CookieDuck.kafkaproject.repo.DeckEntity;
 import com.github.CookieDuck.kafkaproject.repo.DeckRepo;
@@ -15,17 +18,16 @@ import java.util.List;
 import java.util.Optional;
 
 @Slf4j
-@Service
 public class ShuffleService extends AbstractDeckEntityConsumer {
-    private final KafkaProducer<String, String> producer;
     private final DeckRepo deckRepo;
-    private final String deckTopic;
-    private final String outputTopic;
+    private final MessageSender<DeckEntity> deckSender;
+    private final MessageSender<DeckEntity> outputSender;
 
     @Autowired
     public ShuffleService(
         KafkaConsumer<String, String> consumer,
-        KafkaProducer<String, String> producer,
+        MessageSender<DeckEntity> deckSender,
+        MessageSender<DeckEntity> outputSender,
         KafkaConfiguration config,
         ObjectMapper objectMapper,
         DeckRepo deckRepo
@@ -36,29 +38,25 @@ public class ShuffleService extends AbstractDeckEntityConsumer {
             config.getPollIntervalMs(),
             objectMapper
         );
-        this.producer = producer;
         this.deckRepo = deckRepo;
-        this.deckTopic = config.getTopics().getDeck();
-        this.outputTopic = config.getTopics().getOutput();
+
+        this.deckSender = deckSender;
+        this.outputSender = outputSender;
     }
 
     @Override
-    void processDeck(Optional<DeckEntity> maybeDeck) {
-        maybeDeck.ifPresent((packet) -> {
-            log.debug("{} topic got {}", super.getConsumerTopic(), packet);
+    void processDeck(DeckEntity packet) {
+        log.debug("{} topic got {}", super.getConsumerTopic(), packet);
 
-            final int id = packet.getId();
-            getParent(id).ifPresent((parent) -> {
-                List<Card> accumulator = deckRepo.addShuffled(id, packet.getCards());
-                int total = accumulator.size();
-                log.debug("After adding {} cards, parent has {} total cards", packet.getCards().size(), total);
-                if (total == parent.size()) {
-                    log.debug("Got all the cards for id: {}", id);
-                    sendToDeckOrOutput(id, accumulator);
-                } else {
-                    log.debug("Still waiting for {} more cards", parent.size() - total);
-                }
-            });
+        final int id = packet.getId();
+        getParent(id).ifPresent((parent) -> {
+            Pile pile = from(parent);
+            pile.add(packet.getCards());
+
+            if (pile.isAllCardsPresent()) {
+                sendMessage(pile);
+                pile.updateShuffleStatus();
+            }
         });
     }
 
@@ -75,25 +73,78 @@ public class ShuffleService extends AbstractDeckEntityConsumer {
         return Optional.ofNullable(parent);
     }
 
-    private void sendToDeckOrOutput(int id, List<Card> cards) {
-        int current = deckRepo.getShufflesRemaining(id);
-        int remaining = current - 1;
-        String destinationTopic;
-        if (remaining > 0) {
-            log.debug("There are still {} shuffles to do", remaining);
-            destinationTopic = deckTopic;
-        } else {
-            destinationTopic = outputTopic;
-            log.info("Completed shuffling, sending {} to topic: {}", cards, destinationTopic);
-            deckRepo.deleteById(id);
+    private void sendMessage(Pile pile) {
+        MessageSender<DeckEntity> sender = getSender(pile.getRemainingShuffles());
+        MessageBuilder messageBuilder = new MessageBuilder(pile.getParent());
+        DeckEntity message = messageBuilder.createMessage(pile.getCards());
+        sender.send(message);
+    }
+
+    private MessageSender<DeckEntity> getSender(int remainingShuffles) {
+        if (remainingShuffles > 0) {
+            log.debug("There are still {} shuffles to do", remainingShuffles);
+            return deckSender;
+        }
+        log.debug("There are no more shuffles remaining");
+        return outputSender;
+    }
+
+    private Pile from(DeckEntity parent) {
+        return new Pile(deckRepo, parent);
+    }
+
+    private static class Pile {
+        private final DeckRepo deckRepo;
+        private final DeckEntity parent;
+
+        private List<Card> cards;
+
+        private Pile(DeckRepo deckRepo, DeckEntity parent) {
+            this.deckRepo = deckRepo;
+            this.parent = parent;
         }
 
-        deckRepo.updateShufflesRemaining(id, remaining);
-        deckRepo.clearShuffled(id);
-        DeckEntity shuffled = DeckEntity.builder()
-            .id(id)
-            .cards(cards)
-            .build();
-        toRecord(destinationTopic, shuffled).ifPresent(producer::send);
+        DeckEntity getParent() {
+            return parent;
+        }
+
+        void add(List<Card> input) {
+            cards = deckRepo.addShuffled(parent.getId(), input);
+            log.debug("After adding {} cards, parent has {} total cards", input.size(), getSize());
+        }
+
+        List<Card> getCards() {
+            return cards;
+        }
+
+        boolean isAllCardsPresent() {
+            boolean isAllPresent = parent.size() == getSize();
+            if (isAllPresent) {
+                log.debug("Got all the cards for id: {}", parent.getId());
+            } else {
+                log.debug("Still waiting for {} more cards", parent.size() - getSize());
+            }
+            return isAllPresent;
+        }
+
+        void updateShuffleStatus() {
+            final int remaining = getRemainingShuffles();
+            final int id = parent.getId();
+
+            deckRepo.updateShufflesRemaining(id, remaining);
+            deckRepo.clearShuffled(id);
+
+            if (remaining == 0) {
+                deckRepo.deleteById(id);
+            }
+        }
+
+        int getRemainingShuffles() {
+            return deckRepo.getShufflesRemaining(parent.getId()) - 1;
+        }
+
+        private int getSize() {
+            return cards != null ? cards.size() : 0;
+        }
     }
 }

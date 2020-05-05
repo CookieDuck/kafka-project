@@ -73,7 +73,7 @@ class App extends Component {
   sendShuffleRequest() {
     const data = {
       times: this.state.timesToShuffle,
-      cards: bicycle, //TODO get from chooser
+      cards: this.getSelectedDeck(),
     };
     console.log('sending', data);
     fetch('http://localhost:8080/cards/shuffle', {
@@ -93,7 +93,8 @@ class App extends Component {
   }
 
   getSelectedDeck() {
-    return this.state.selectedDeck.mapping || [];
+    const selectedDeck = this.state.selectedDeck || DECK_OPTIONS[0];
+    return selectedDeck.mapping;
   }
 
   handleMessage(event) {
@@ -106,7 +107,6 @@ class App extends Component {
   }
 
   handleTimesToShuffleUpdate(asNumber) {
-    // ensure value is between MIN and MAX values
     const timesToShuffle = Math.min(
       MAX_SHUFFLES,
       Math.max(asNumber, MIN_SHUFFLES)

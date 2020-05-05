@@ -18,7 +18,7 @@ public class InMemoryDeckRepo implements DeckRepo {
     @Override
     public synchronized DeckEntity save(DeckEntity deck) {
         int id = generateId(deck);
-        if (decks.get(id) != null) {
+        if (getById(id) != null) {
             throw new DuplicateKeyException("Already processing a request for a deck: " + deck);
         }
         DeckEntity entity = DeckEntity.builder()
@@ -36,7 +36,7 @@ public class InMemoryDeckRepo implements DeckRepo {
 
     @Override
     public boolean deleteById(int id) {
-        DeckEntity current = decks.get(id);
+        DeckEntity current = getById(id);
         if (current == null) {
             log.error("Error deleting: no deck exists by id: {}", id);
             return false;

@@ -2,6 +2,9 @@ package com.github.CookieDuck.kafkaproject.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.CookieDuck.kafkaproject.config.KafkaConfiguration;
+import com.github.CookieDuck.kafkaproject.message.KafkaMessageSender;
+import com.github.CookieDuck.kafkaproject.message.MessageBuilder;
+import com.github.CookieDuck.kafkaproject.message.MessageSender;
 import com.github.CookieDuck.kafkaproject.model.Card;
 import com.github.CookieDuck.kafkaproject.repo.DeckEntity;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import java.util.List;
-import java.util.Optional;
 
 import static java.util.Collections.emptyList;
 
@@ -21,12 +23,11 @@ import static java.util.Collections.emptyList;
 @Service
 @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
 public class HandService extends AbstractDeckEntityConsumer {
-    private final KafkaProducer<String, String> producer;
-    private final String producerTopic;
+    private final MessageSender<DeckEntity> sender;
 
     public HandService(
         KafkaConsumer<String, String> consumer,
-        KafkaProducer<String, String> producer,
+        MessageSender<DeckEntity> sender,
         KafkaConfiguration config,
         ObjectMapper objectMapper,
         String consumerTopic
@@ -37,29 +38,24 @@ public class HandService extends AbstractDeckEntityConsumer {
             config.getPollIntervalMs(),
             objectMapper
         );
-        this.producer = producer;
-        this.producerTopic = config.getTopics().getShuffled();
+
+        this.sender = sender;
     }
 
     @Override
-    void processDeck(Optional<DeckEntity> maybeDeck) {
-        maybeDeck.ifPresent((deck) -> {
-            List<Card> allCards = deck.getCards();
-            log.debug("{} got {} cards", super.getConsumerTopic(), allCards.size());
-            while (!allCards.isEmpty()) {
-                List<Card> front = takeRandomCardsFromFront(allCards);
-                allCards = allCards.subList(front.size(), allCards.size());
-                log.debug("{} took {} cards, so now {} remain", super.getConsumerTopic(), front.size(), allCards.size());
-                DeckEntity portion = DeckEntity.builder()
-                    .id(deck.getId())
-                    .cards(front)
-                    .build();
+    void processDeck(DeckEntity deck) {
+        MessageBuilder messageBuilder = new MessageBuilder(deck);
+        List<Card> allCards = deck.getCards();
+        log.debug("{} got {} cards", super.getConsumerTopic(), allCards.size());
+        while (!allCards.isEmpty()) {
+            List<Card> frontPacket = takeRandomCardsFromFront(allCards);
+            allCards = allCards.subList(frontPacket.size(), allCards.size());
+            log.debug("{} took {} cards, so now {} remain", super.getConsumerTopic(), frontPacket.size(), allCards.size());
 
-                toRecord(producerTopic, portion).ifPresent(producer::send);
-                pause();
-            }
-            log.debug("{} finished sending its cards", super.getConsumerTopic());
-        });
+            sender.send(messageBuilder.createMessage(frontPacket));
+            sometimesPauseBeforeProcessingMoreCards();
+        }
+        log.debug("{} finished sending its cards", super.getConsumerTopic());
     }
 
     @Override
@@ -92,16 +88,22 @@ public class HandService extends AbstractDeckEntityConsumer {
     }
 
     /**
-     * Sleep for 1 or 3 milliseconds.  This SHOULD add some more randomness and
+     * Sleep for no time, or 1 millisecond.  This SHOULD add some more randomness and
      * interweaving of cards from the top and bottom consumers producing to the
      * shuffled topic.
      */
-    private void pause() {
+    private void sometimesPauseBeforeProcessingMoreCards() {
         double diceRoll = Math.random();
-        int sleepMs = diceRoll < 0.5 ? 1 : 3;
+        boolean shouldSleep = diceRoll < 0.5;
+        if (shouldSleep) {
+            sleep();
+        }
+    }
+
+    private void sleep() {
         try {
-            Thread.sleep(sleepMs);
-            log.debug("The hand riffling the {} packet slept for {} ms", getConsumerTopic(), sleepMs);
+            Thread.sleep(1);
+            log.debug("The hand riffling the {} packet slept for {} ms", getConsumerTopic(), 1);
         } catch (InterruptedException e) {
             log.error("Thread Interrupted while sleeping", e);
         }

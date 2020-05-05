@@ -18,6 +18,8 @@ public class DeckEntityConsumer implements Runnable {
     private final String consumerTopic;
     private final int pollInterval;
 
+    private boolean listeningForMessages = true;
+
     DeckEntityConsumer(
         KafkaConsumer<String, String> consumer,
         Consumer<ConsumerRecord<String, String>> consumingFunction,
@@ -30,17 +32,13 @@ public class DeckEntityConsumer implements Runnable {
         this.pollInterval = pollInterval;
 
         this.subscribe();
+        this.startConsumingThread();
     }
 
     @Override
     public void run() {
         try {
-            while (true) {
-                ConsumerRecords<String, String> records =
-                    this.consumer.poll(Duration.ofMillis(this.pollInterval));
-                log.debug("Received {} records after poll of topic: {}", records.count(), this.consumerTopic);
-                records.forEach(this.consumingFunction);
-            }
+            processDeckRecords();
         } catch (WakeupException wakeup) {
             log.debug("Received WakeupException; shutting down");
         } finally {
@@ -49,17 +47,33 @@ public class DeckEntityConsumer implements Runnable {
         }
     }
 
-    private void subscribe() {
-        log.debug("Subscribing to {}", this.consumerTopic);
-        this.consumer.subscribe(singletonList(this.consumerTopic));
+    String getConsumerTopic() {
+        return this.consumerTopic;
+    }
 
-        log.debug("Starting consumer thread");
-        Thread thread = new Thread(this);
-        thread.start();
+    private void processDeckRecords() {
+        while (this.listeningForMessages) {
+            ConsumerRecords<String, String> records =
+                this.consumer.poll(Duration.ofMillis(this.pollInterval));
+            log.debug("Received {} records after poll of topic: {}", records.count(), this.consumerTopic);
+            records.forEach(this.consumingFunction);
+        }
     }
 
     void shutdown() {
         log.debug("Shutdown called");
+        this.listeningForMessages = false;
         this.consumer.wakeup();
+    }
+
+    private void subscribe() {
+        log.debug("Subscribing to {}", this.consumerTopic);
+        this.consumer.subscribe(singletonList(this.consumerTopic));
+    }
+
+    private void startConsumingThread() {
+        log.debug("Starting consumer thread");
+        Thread thread = new Thread(this);
+        thread.start();
     }
 }
