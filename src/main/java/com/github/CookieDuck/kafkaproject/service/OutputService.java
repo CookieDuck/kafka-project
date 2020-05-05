@@ -37,8 +37,8 @@ public class OutputService extends AbstractDeckEntityConsumer {
     }
 
     @Override
-    void processDeck(Optional<DeckEntity> maybeDeck) {
-        maybeDeck.ifPresent(this::publishSSEEvent);
+    void processDeck(DeckEntity deck) {
+        publishSSEEvent(deck);
     }
 
     @Override
