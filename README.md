@@ -24,7 +24,7 @@ steps outlined above in the application, culminating in an SSE containing the sh
 Upon receiving this SSE, the UI will show the results.
 
 ## Environment setup
-#### Download and run Kafka locally:
+#### Download and run Kafka locally (option 1):
 1. Download the latest [Kafka](https://kafka.apache.org/downloads)
 1. Follow [Apache's installation instructions](https://kafka.apache.org/quickstart)
 1. cd into the directory into which you installed Kafka
@@ -37,12 +37,21 @@ Upon receiving this SSE, the UI will show the results.
   1. `kafka-topics.sh --bootstrap-server localhost:9092 --create --replication-factor 1 --partitions 13 --topic shuffled`
   1. `kafka-topics.sh --bootstrap-server localhost:9092 --create --replication-factor 1 --partitions 13 --topic output`
 
+## Environment setup (option 2)
+#### Run Kafka in Docker:
+1. Pull the kafka docker image [source](https://github.com/wurstmeister/kafka-docker) `docker pull wurstmeister/kafka-docker`
+1. Run the container `docker-compose up -d` (`-d` puts it in the background.  To see container output, omit `-d`)
+  * Note that you can override env variables.  For example, overriding the docker image:
+  `ZOOKEEPER_IMAGE=<<some other image here>> KAFKA_IMAGE=<<some other image here>> docker-compose up -d`
+1. When finished, run `docker-compose down` to shut down the container.
+
 ## Installation
 1. clone project
 1. cd into project directory
 1. run `./gradlew`
 
 ## Running Application
+1. Start kafka, using option 1 (locally running kafka zookeeper, broker, and manually created topics) or option 2 (dockerized)
 1. From the project directory, run the bootRun task: `./gradlew bootRun`
 1. From a web browser, navigate to localhost:8080
 1. localhost:8080 should be serving a webpage with some UI elements.
