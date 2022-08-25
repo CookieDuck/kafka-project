@@ -27,6 +27,7 @@ Upon receiving this SSE, the UI will show the results.
 
 #### Run Kafka in Docker (option 1):
 1. Pull the kafka docker image [source](https://github.com/wurstmeister/kafka-docker) `docker pull wurstmeister/kafka-docker`
+1. run `ifconfig`, and put the `inet` value of the `en0` section as the value of `KAFKA_ADVERTISED_HOST_NAME` in docker-compose.yml
 1. Run the container `docker-compose up -d` (`-d` puts it in the background.  To see container output, omit `-d`)
   * Note that you can override env variables.  For example, overriding the docker image:
   `ZOOKEEPER_IMAGE=<<some other image here>> KAFKA_IMAGE=<<some other image here>> docker-compose up -d`
@@ -51,7 +52,7 @@ Upon receiving this SSE, the UI will show the results.
 1. run `./gradlew`
 
 ## Running Application
-1. Start kafka, using option 1 (locally running kafka zookeeper, broker, and manually created topics) or option 2 (dockerized)
+1. Start kafka, using option 2 (locally running kafka zookeeper, broker, and manually created topics) or option 1 (dockerized)
 1. From the project directory, run the bootRun task: `./gradlew bootRun`
 1. From a web browser, navigate to localhost:8080
 1. localhost:8080 should be serving a webpage with some UI elements.
