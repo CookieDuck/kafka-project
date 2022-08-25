@@ -20,7 +20,7 @@ configurations {
 repositories {
 	mavenCentral()
 	maven {
-		url 'https://artifactory.global.dish.com/artifactory/repo'
+		url "https://plugins.gradle.org/m2/"
 	}
 }
 
